@@ -144,19 +144,26 @@ function misery_misery_handlers() {
       '#module' => 'misery',
       '#description' => t('Present the user with a "Not Found" error.'),
     ),
-    'crash_ie6' => array(
-    '#type' => 'init',
-    '#default_chance' => 90,
-    '#display' => t('Crash IE6'),
-    '#module' => 'misery',
-    '#description' => t('Crash IE6 browser.'),
-    ),
     'form_submit' => array(
       '#type' => 'form_validate',
       '#default_chance' => 60,
       '#display' => t("Forms don't submit"),
       '#module' => 'misery',
       '#description' => t('Redirect back to the form during validation to prevent submission.'),
+    ),
+    'crash_ie6' => array(
+      '#type' => 'init',
+      '#default_chance' => 0,
+      '#display' => t('Crash IE6'),
+      '#module' => 'misery',
+      '#description' => t('If the user is using Internet Explorer 6, this will crash their browser.'),
+    ),
+    'spam' => array(
+      '#type' => 'nodeapi',
+      '#default_chance' => 0,
+      '#display' => t('Spam'),
+      '#module' => 'misery',
+      '#description' => t('Replace the content of nodes with the word "spam".'),
     ),
   );
 }
@@ -199,6 +206,16 @@ function misery_misery_handler_configuration_form($handler) {
         ),
       );
       break;
+    case 'spam':
+      return array(
+        'misery_spam_text' => array(
+          '#type' => 'textfield',
+          '#title' => t('Word'),
+          '#default_value' => variable_get('misery_spam_text', 'SPAM'),
+          '#description' => t('Enter a word to spam users with.'),
+        ),
+      );
+      break;
   }
 }
 
@@ -214,6 +231,16 @@ function misery_init() {
  */
 function misery_form_alter(&$form, $form_state, $form_id) {
   $form['#validate'][] = 'misery_form_validate';
+}
+
+/**
+ * Implementation of hook_nodeapi().
+ */
+function misery_nodeapi(&$node, $op, $a3, $a4) {
+  if ($op == 'view') {
+    $params['node'] = &$node;
+    misery('nodeapi', $params);
+  }
 }
 
 /**
@@ -360,6 +387,13 @@ function misery_misery_perform($handler, $type, &$params = array()) {
       drupal_goto($_GET['q']);
       // implicit break
 
+    case 'crash_ie6':
+      drupal_add_js('for (x in document.write) { document.write(x); }', 'inline');
+      break;
+
+    case 'spam':
+      $params['node']->content['body']['#value'] = misery_spamify($params['node']->content['body']['#value']);
+      break;
   }
 }
 
@@ -398,6 +432,16 @@ function misery_not_found() {
 function misery_user_endure() {
   global $user;
   return isset($user->endure_misery) ? $user->endure_misery : FALSE;
+}
+
+/**
+ * Replace all words in this string with the word spam (but leave any HTML tags).
+ */
+function misery_spamify($string) {
+  // This regex is not right. But it does produce totally annoying content, so lets stick with it.
+  $pattern = "/[^<(\/?\w)>]\w/";
+  $replace = ' ' . variable_get('misery_spam_text', 'SPAM') . ' ';
+  return preg_replace($pattern, $replace ,$string);
 }
 
 // to do : more misery types
